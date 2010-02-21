@@ -1,0 +1,8 @@
+CHANGELOG
+
+v0.2b:
+	Fixed a bug in the U8 support where it would not properly change directories. I know I said this was 100% working, but this bug wasn't triggered by the layout of my test archives.
+	Now supports extracting multiple archives at once. Just specify them one after another on the command line.
+
+v0.1b:
+	Public release
