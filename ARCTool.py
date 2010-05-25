@@ -102,11 +102,12 @@ class U8_globals:
 	pass
 	
 def unyaz(input, output):
-	global quiet
+	global quiet, list
 	#shamelessly stolen^W borrowed from yagcd
-	data_size = struct.unpack_from(">I", input.read(4)) #uncompressed data size
-	data_size = data_size[0]
-	#print data_size
+	data_size, = struct.unpack_from(">I", input.read(4)) #uncompressed data size
+	if list:
+		print "Uncompressed size:", data_size, "bytes"
+		return
 	t = input.read(8) #dummy
 	srcplace = 0
 	dstplace = 0
@@ -189,19 +190,26 @@ def getFileEntry(index, h, f):
 	return retval
 
 def processNode(node, h, f):
-	global quiet
+	global quiet, depthnum, list
 	nodename = getString(node.filenameOffset + h.stringTableOffset + 0x20, f)
-	if quiet == False:
-		print "Processing node", nodename
-	makedir(nodename)
-	os.chdir(nodename)
+	if list == False:
+		if quiet == False:
+			print "Processing node", nodename
+		makedir(nodename)
+		os.chdir(nodename)
+	else:
+		print ("  "*depthnum) + nodename + "/"
+		depthnum += 1
 	for i in range(0, node.numFileEntries):
 		currfile = getFileEntry(node.firstFileEntryOffset + i, h, f)
+		currname = getString(currfile.filenameOffset + h.stringTableOffset + 0x20, f)
 		if (currfile.id == 0xFFFF): #file is a subdir
-			if (currfile.filenameOffset != 0 | currfile.filenameOffset != 2): # don't go to "." and ".."
+			if currname != "." and currname != "..": # don't go to "." and ".."
 				processNode(getNode(currfile.dataOffset, f, h), h, f)
 		else:
-			currname = getString(currfile.filenameOffset + h.stringTableOffset + 0x20, f)
+			if list:
+				print ("  "*depthnum) + currname, "-", currfile.dataSize
+				continue
 			if quiet == False:
 				print "Dumping", nodename + "/" + currname, " 0%",
 			try:
@@ -209,7 +217,6 @@ def processNode(node, h, f):
 				dest = open(currname, "wb")
 				f.seek(currfile.dataOffset + h.dataStartOffset + 0x20)
 				size = currfile.dataSize
-				#print currfile.dataSize
 				while size > 0:
 					if quiet == False:
 						calcpercent = int(((currfile.dataSize-size)/(currfile.dataSize*1.0))*100)
@@ -231,16 +238,21 @@ def processNode(node, h, f):
 			except IOError:
 				print "OMG SOMETHING WENT WRONG!!!!1111!!!!!"
 				exit()
-	os.chdir("..")
+	if list == False:
+		os.chdir("..")
+	else:
+		depthnum -= 1
 
 def unrarc(i, o):
+	global list
 	header = rarc_header_class()
 	header.unpack(i.read(header.size()))
-	try:
-		makedir(o)
-	except:
-		pass
-	os.chdir(o)
+	if list == False:
+		try:
+			makedir(o)
+		except:
+			pass
+		os.chdir(o)
 	processNode(getNode(0, i, header), header, i)
 
 def get_u8_name(i, g, node):
@@ -261,14 +273,15 @@ def get_u8_node(i, g, index):
 	return retval
 	
 def unu8(i, o):
-	global quiet
+	global quiet, depthnum, list
 	header = U8_archive_header()
 	header.unpack(i.read(header.size()))
-	try:
-		makedir(o)
-	except:
-		pass
-	os.chdir(o)
+	if list == False:
+		try:
+			makedir(o)
+		except:
+			pass
+		os.chdir(o)
 	root = U8_node()
 	root.unpack(i.read(header.size()))
 	g = U8_globals()
@@ -280,7 +293,14 @@ def unu8(i, o):
 	for index in range(2, root.fsize+1):
 		node = get_u8_node(i, g, index)
 		name = get_u8_name(i, g, node)
-		if node.type == 0:
+		if list:
+			if node.type == 0:
+				print ("  "*depthnum) + name, "-", node.fsize, "bytes"
+			elif node.type == 0x0100:
+				print ("  "*depthnum) + name + "/"
+				depthnum += 1
+				depth.append(node.fsize)
+		elif node.type == 0:
 			if quiet == False:
 				print "Dumping file node", name, " 0%",
 			i.seek(node.data_offset)
@@ -314,51 +334,64 @@ def unu8(i, o):
 			os.chdir(name)
 			depth.append(node.fsize)
 		if index == depth[-1]:
-			os.chdir("..")
+			if list == False:
+				os.chdir("..")
+			depthnum -= 1
 			depth.pop()
-	os.chdir("..")
+	if list == False:
+		os.chdir("..")
 
-parser = OptionParser(usage="python %prog [-q] [-o <output>] <inputfile> [inputfile2] ... [inputfileN]", version="ARCTool 0.2b")
-parser.add_option("-o", "--output", action="store", type="string", dest="of", help="write output to FILE/DIR. If you are extracting multiple archives, all of them will be put in this dir.", metavar="FILE/DIR")
-parser.add_option("-q", "--quiet", action="store_true", dest="quiet", default=False, help="don't print anything (except errors)")
-
-(options, args) = parser.parse_args()
-
-of = options.of
-quiet = options.quiet
-
-if len(args) < 1:
-	parser.error("Input filename required")
-
-if len(args) > 1:
-	if options.of != None:
-		makedir(of)
-		os.chdir(of)
+def main():
+	global of, quiet, list, depthnum
+	parser = OptionParser(usage="python %prog [-q] [-o <output>] <inputfile> [inputfile2] ... [inputfileN]", version="ARCTool 0.3b")
+	parser.add_option("-o", "--output", action="store", type="string", dest="of", help="write output to FILE/DIR. If you are extracting multiple archives, all of them will be put in this dir.", metavar="FILE/DIR")
+	parser.add_option("-q", "--quiet", action="store_true", dest="quiet", default=False, help="don't print anything (except errors)")
+	parser.add_option("-l", "--list", action="store_true", dest="list", default=False, help="print a list of files contained in the specified archive (ignores -q)")
 	
-for file in args:
-	if options.of == None or len(args) > 1:
-		of = os.path.split(file)[1] + ".extracted"
-	if len(args) > 1 and options.of != None:
-		file = "../" + file
-	try:
-		f = open(file, "rb")
-	except IOError:
-		print "Input file could not be opened!"
-		exit()
-	type = f.read(4)
-	if type == "Yaz0":
-		if quiet == False:
-			print "Yaz0 compressed archive"
-		unyaz(f, openOutput(of))
-	elif type == "RARC":
-		if quiet == False:
-			print "RARC archive"
-		unrarc(f, of)
-	elif type == "U\xAA8-":
-		if quiet == False:
-			print "U8 archive"
-		unu8(f, of)
-	else:
-		print "Unknown archive type!"
-		exit()
-	f.close()
+	
+	(options, args) = parser.parse_args()
+	
+	of = options.of
+	quiet = options.quiet
+	list = options.list
+	
+	depthnum = 0
+	
+	if len(args) < 1:
+		parser.error("Input filename required")
+	
+	if len(args) > 1:
+		if options.of != None:
+			makedir(of)
+			os.chdir(of)
+		
+	for file in args:
+		if options.of == None or len(args) > 1:
+			of = os.path.split(file)[1] + ".extracted"
+		if len(args) > 1 and options.of != None:
+			file = "../" + file
+		try:
+			f = open(file, "rb")
+		except IOError:
+			print "Input file could not be opened!"
+			exit()
+		type = f.read(4)
+		if type == "Yaz0":
+			if quiet == False:
+				print "Yaz0 compressed archive"
+			unyaz(f, openOutput(of))
+		elif type == "RARC":
+			if quiet == False:
+				print "RARC archive"
+			unrarc(f, of)
+		elif type == "U\xAA8-":
+			if quiet == False:
+				print "U8 archive"
+			unu8(f, of)
+		else:
+			print "Unknown archive type!"
+			exit()
+		f.close()
+	
+if __name__ == "__main__":
+	main()
