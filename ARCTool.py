@@ -13,7 +13,7 @@ def openOutput(f):
 def makedir(dirname):
 	global quiet
 	try:
-		os.mkdir(dirname)
+		os.makedirs(dirname)
 	except OSError, e:
 		if quiet == False:
 			print "WARNING: Directory", dirname, "already exists!"
@@ -301,7 +301,7 @@ def unu8(i, o):
 				depthnum += 1
 				depth.append(node.fsize)
 		elif node.type == 0:
-			if quiet == False:
+			if not quiet:
 				print "Dumping file node", name, " 0%",
 			i.seek(node.data_offset)
 			try:
@@ -317,7 +317,7 @@ def unu8(i, o):
 							sys.stdout.write("\b\b" + str(calcpercent) + "%")
 							sys.stdout.flush()
 							percent = calcpercent
-					dest.write(f.read(size))
+					dest.write(i.read(size))
 					size -= 1024
 				if quiet == False:
 					if percent > 9:
