@@ -7,16 +7,16 @@ def openOutput(f):
 	try:
 		return open(f, "wb")
 	except IOError:
-		print "Output file could not be opened!"
+		print("Output file could not be opened!")
 		exit()
 
 def makedir(dirname):
 	global quiet
 	try:
 		os.mkdir(dirname)
-	except OSError, e:
+	except OSError as e:
 		if quiet == False:
-			print "WARNING: Directory", dirname, "already exists!"
+			print("WARNING: Directory", dirname, "already exists!")
 
 class rarc_header_class:
 	_structformat = ">I4xI16xI8xI4xI8x"
@@ -106,7 +106,7 @@ def unyaz(input, output):
 	#shamelessly stolen^W borrowed from yagcd
 	data_size, = struct.unpack_from(">I", input.read(4)) #uncompressed data size
 	if list:
-		print "Uncompressed size:", data_size, "bytes"
+		print("Uncompressed size:", data_size, "bytes")
 		return
 	t = input.read(8) #dummy
 	srcplace = 0
@@ -114,7 +114,7 @@ def unyaz(input, output):
 	bitsleft = 0
 	currbyte = 0
 	if quiet == False:
-		print "Reading input"
+		print("Reading input")
 	src = input.read()
 	dst = [" "]*data_size
 	#print len(dst), len(src)
@@ -160,7 +160,7 @@ def unyaz(input, output):
 				sys.stdout.flush()
 				percent = calcpercent
 	if quiet == False:
-		print "\nWriting output"
+		print("\nWriting output")
 	output.write("".join(dst))
 
 def getNode(index, f, h):
@@ -194,11 +194,11 @@ def processNode(node, h, f):
 	nodename = getString(node.filenameOffset + h.stringTableOffset + 0x20, f)
 	if list == False:
 		if quiet == False:
-			print "Processing node", nodename
+			print("Processing node", nodename)
 		makedir(nodename)
 		os.chdir(nodename)
 	else:
-		print ("  "*depthnum) + nodename + "/"
+		print(("  "*depthnum) + nodename + "/")
 		depthnum += 1
 	for i in range(0, node.numFileEntries):
 		currfile = getFileEntry(node.firstFileEntryOffset + i, h, f)
@@ -208,10 +208,10 @@ def processNode(node, h, f):
 				processNode(getNode(currfile.dataOffset, f, h), h, f)
 		else:
 			if list:
-				print ("  "*depthnum) + currname, "-", currfile.dataSize
+				print(("  "*depthnum) + currname, "-", currfile.dataSize)
 				continue
 			if quiet == False:
-				print "Dumping", nodename + "/" + currname, " 0%",
+				print("Dumping", nodename + "/" + currname, " 0%", end=' ')
 			try:
 				percent = 0
 				dest = open(currname, "wb")
@@ -233,10 +233,10 @@ def processNode(node, h, f):
 					if percent > 9:
 						sys.stdout.write("\b")
 					sys.stdout.write("\b\b100%")
-					print ""
+					print("")
 				dest.close()
 			except IOError:
-				print "OMG SOMETHING WENT WRONG!!!!1111!!!!!"
+				print("OMG SOMETHING WENT WRONG!!!!1111!!!!!")
 				exit()
 	if list == False:
 		os.chdir("..")
@@ -260,9 +260,9 @@ def get_u8_name(i, g, node):
 	i.seek(g.string_table + node.name_offset-1)
 	while True:
 		t = i.read(1)
-		if t == "\0":
+		if t == b"\0":
 			break
-		retval.append(t)
+		retval.append(t.decode("utf8"))
 	return "".join(retval)
 
 def get_u8_node(i, g, index):
@@ -295,14 +295,14 @@ def unu8(i, o):
 		name = get_u8_name(i, g, node)
 		if list:
 			if node.type == 0:
-				print ("  "*depthnum) + name, "-", node.fsize, "bytes"
+				print(("  "*depthnum) + name, "-", node.fsize, "bytes")
 			elif node.type == 0x0100:
-				print ("  "*depthnum) + name + "/"
+				print(("  "*depthnum) + name + "/")
 				depthnum += 1
 				depth.append(node.fsize)
 		elif node.type == 0:
 			if quiet == False:
-				print "Dumping file node", name, " 0%",
+				print("Dumping file node", name, " 0%", end=' ')
 			i.seek(node.data_offset)
 			try:
 				dest = open(name, "wb")
@@ -317,7 +317,7 @@ def unu8(i, o):
 							sys.stdout.write("\b\b" + str(calcpercent) + "%")
 							sys.stdout.flush()
 							percent = calcpercent
-					dest.write(f.read(size))
+					dest.write(i.read(size))
 					size -= 1024
 				if quiet == False:
 					if percent > 9:
@@ -325,11 +325,11 @@ def unu8(i, o):
 					sys.stdout.write("\b\b100%\n")
 				dest.close()
 			except IOError:
-				print "OMG SOMETHING WENT WRONG!!!!!!!111111111!!!!!!!!"
+				print("OMG SOMETHING WENT WRONG!!!!!!!111111111!!!!!!!!")
 				exit()
 		elif node.type == 0x0100:
 			if quiet == False:
-				print "Processing node", name
+				print("Processing node", name)
 			makedir(name)
 			os.chdir(name)
 			depth.append(node.fsize)
@@ -373,23 +373,23 @@ def main():
 		try:
 			f = open(file, "rb")
 		except IOError:
-			print "Input file could not be opened!"
+			print("Input file could not be opened!")
 			exit()
 		type = f.read(4)
-		if type == "Yaz0":
+		if type == b"Yaz0":
 			if quiet == False:
-				print "Yaz0 compressed archive"
+				print("Yaz0 compressed archive")
 			unyaz(f, openOutput(of))
-		elif type == "RARC":
+		elif type == b"RARC":
 			if quiet == False:
-				print "RARC archive"
+				print("RARC archive")
 			unrarc(f, of)
-		elif type == "U\xAA8-":
+		elif type == b"U\xAA8-":
 			if quiet == False:
-				print "U8 archive"
+				print("U8 archive")
 			unu8(f, of)
 		else:
-			print "Unknown archive type!"
+			print("Unknown archive type!")
 			exit()
 		f.close()
 	
